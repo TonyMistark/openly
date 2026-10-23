@@ -272,4 +272,19 @@ public enum LSKAssociation {
             throw LSKError.launchServicesFailed("LSRegisterURL(\(url.path)) error \(status)")
         }
     }
+
+    /// 清掉用户为 `kind` 显式设置过的默认应用，交还系统决定
+    /// （对应 infat 没有的能力：LS 没有「取消设置」的公开 API，
+    /// 只能从 secure plist 里摘掉那条 LSHandlers 记录）。
+    /// 扩展名先解析成 UTI 一起匹配——系统可能以任一形态落盘。
+    public static func clearUserDefault(for kind: AssociationKind) throws {
+        let resolvedUTI: String?
+        switch kind {
+        case .fileExtension(let ext):
+            resolvedUTI = uti(forExtensionIfAny: ext)
+        case .urlScheme, .superType, .uti:
+            resolvedUTI = nil
+        }
+        try LSKDatabase.removeUserHandler(for: kind, resolvedUTI: resolvedUTI)
+    }
 }

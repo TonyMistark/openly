@@ -54,6 +54,8 @@ struct AssociationRow: Identifiable, Hashable {
     var defaultApp: AppRef?
     var registered: [AppRef]
     let category: Category
+    /// 用户在 secure plist 里显式设置过（决定「恢复系统默认」是否可用）
+    let isUserSet: Bool
 
     var kindKey: String {
         kind.kindKey()
@@ -84,6 +86,16 @@ struct RecentChange: Identifiable, Equatable {
     let date: Date
 }
 
+/// 撤销栈的一条记录：修改**之前**的默认是什么。
+/// `previousAppKey == nil` 表示之前没有用户显式默认——撤销动作等价于
+/// 「恢复系统默认」（从 secure plist 摘记录）。
+struct UndoRecord {
+    let kind: AssociationKind
+    let displayID: String
+    let previousAppKey: String?
+    let previousName: String?
+}
+
 /// 常用扩展名兜底清单：LS plist 只含「用户显式设置过」的关联，
 /// 与这份清单合并才能撑起首屏总览（三层兜底的第二层，第三层是搜索）
 let curatedExtensions: [String] = [
@@ -109,6 +121,15 @@ final class AssociationStore: ObservableObject {
     @Published var selectedKinds: Set<String> = []
     /// 最近修改记录（仅本次会话；持久化在 M3 一并做）
     @Published var recentChanges: [RecentChange] = []
+    /// 撤销栈：每次成功的修改压入一条，⌘Z 逐条回退
+    @Published private(set) var undoStack: [UndoRecord] = []
+    var canUndo: Bool { !undoStack.isEmpty }
+    /// 菜单项标题：栈顶那条要撤的是什么
+    var undoMenuTitle: String? {
+        guard let record = undoStack.last else { return nil }
+        let target = record.previousName ?? "系统默认"
+        return "撤销 \(record.displayID) → \(target)"
+    }
     @Published var editingRow: AssociationRow?
     @Published var batchSheetRow: AssociationRow?
     @Published var toast: String?
@@ -136,6 +157,11 @@ final class AssociationStore: ObservableObject {
         var seen = Set<String>()
         var rows: [AssociationRow] = []
 
+        // 用户显式设置过的 kind 键集合：secure plist 是「用户改过」的唯一凭证，
+        // 「恢复系统默认」按钮只对这些行显示
+        let userSetKeys: Set<String> = Set((try? LSKDatabase.handlers())?
+            .compactMap { $0.associationKind?.kindKey() } ?? [])
+
         func add(_ kind: AssociationKind, displayID: String, uti: String?) {
             let key = displayID.lowercased()
             guard !seen.contains(key) else { return }
@@ -153,7 +179,10 @@ final class AssociationStore: ObservableObject {
                     info = try? LSKAssociation.info(forType: typeName)
                 }
             }
-            rows.append(makeRow(kind: kind, displayID: displayID, uti: uti ?? info?.uti, info: info))
+            rows.append(makeRow(
+                kind: kind, displayID: displayID, uti: uti ?? info?.uti, info: info,
+                isUserSet: userSetKeys.contains(kind.kindKey())
+            ))
         }
 
         // 1. 用户设置过的关联（secure plist）
@@ -191,7 +220,8 @@ final class AssociationStore: ObservableObject {
     }
 
     nonisolated private static func makeRow(
-        kind: AssociationKind, displayID: String, uti: String?, info: AssociationInfo?
+        kind: AssociationKind, displayID: String, uti: String?, info: AssociationInfo?,
+        isUserSet: Bool = false
     ) -> AssociationRow {
         let registered = (info?.allAppBundleIDs ?? []).map { LSKAppResolver.appRef(forBundleID: $0) }
         let defaultRef = info?.defaultAppBundleID.map { LSKAppResolver.appRef(forBundleID: $0) }
@@ -207,7 +237,8 @@ final class AssociationStore: ObservableObject {
             uti: uti,
             defaultApp: defaultRef,
             registered: registered,
-            category: category
+            category: category,
+            isUserSet: isUserSet
         )
     }
 
@@ -299,12 +330,19 @@ final class AssociationStore: ObservableObject {
         let kind = row.kind
         let displayID = row.displayID
         let fromName = row.defaultApp?.name
+        // 撤销要回到的地方：修改前的默认（可能为 nil = 无显式默认）
+        let previous = row.defaultApp
 
         Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 try await Self.applyChange(appKey: appKey, kind: kind)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
+                    self.pushUndo(UndoRecord(
+                        kind: kind, displayID: displayID,
+                        previousAppKey: previous.map { $0.path ?? $0.name },
+                        previousName: previous?.name
+                    ))
                     self.recordChange(kind: kind, displayID: displayID, fromName: fromName, toName: app.name)
                     self.showToast("\(displayID) → \(app.name) ✓")
                     self.refreshRow(kind: kind)
@@ -330,14 +368,14 @@ final class AssociationStore: ObservableObject {
         showToast("开始批量修改 \(total) 项 → \(app.name)（系统会逐项弹确认框，请留意）")
 
         Task.detached(priority: .userInitiated) { [weak self] in
-            var ok: [(kind: AssociationKind, displayID: String, fromName: String?)] = []
+            var ok: [(kind: AssociationKind, displayID: String, previous: AppRef?)] = []
             var skipped: [String] = []
             var failed: [String] = []
 
             for row in targets {
                 do {
                     try await Self.applyChange(appKey: appKey, kind: row.kind)
-                    ok.append((row.kind, row.displayID, row.defaultApp?.name))
+                    ok.append((row.kind, row.displayID, row.defaultApp))
                 } catch let error as LSKError {
                     // 应用不声明支持该类型 → 系统拒绝，计为跳过
                     if case .launchServicesFailed = error {
@@ -358,8 +396,13 @@ final class AssociationStore: ObservableObject {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 for entry in okResults {
+                    self.pushUndo(UndoRecord(
+                        kind: entry.kind, displayID: entry.displayID,
+                        previousAppKey: entry.previous.map { $0.path ?? $0.name },
+                        previousName: entry.previous?.name
+                    ))
                     self.recordChange(kind: entry.kind, displayID: entry.displayID,
-                                      fromName: entry.fromName, toName: appRef.name)
+                                      fromName: entry.previous?.name, toName: appRef.name)
                     self.refreshRow(kind: entry.kind)
                 }
                 self.clearSelection()
@@ -371,6 +414,83 @@ final class AssociationStore: ObservableObject {
                     summary += "，失败 \(failedList.count) 项"
                 }
                 self.showToast(summary)
+            }
+        }
+    }
+
+    // MARK: - 恢复系统默认与撤销
+
+    private func pushUndo(_ record: UndoRecord) {
+        undoStack.append(record)
+        if undoStack.count > 50 { undoStack.removeFirst(undoStack.count - 50) }
+    }
+
+    /// 清掉该类型用户显式设置的默认，交还系统决定。
+    /// 恢复动作本身也可撤销：压入一条「恢复前默认」的记录。
+    func restoreSystemDefault(_ row: AssociationRow) {
+        editingRow = nil
+        let kind = row.kind
+        let displayID = row.displayID
+        let previous = row.defaultApp
+        showToast("正在恢复 \(displayID) 的系统默认…")
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                try LSKAssociation.clearUserDefault(for: kind)
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.pushUndo(UndoRecord(
+                        kind: kind, displayID: displayID,
+                        previousAppKey: previous.map { $0.path ?? $0.name },
+                        previousName: previous?.name
+                    ))
+                    self.recordChange(kind: kind, displayID: displayID,
+                                      fromName: previous?.name, toName: "系统默认")
+                    self.refreshRow(kind: kind)
+                    self.showToast("\(displayID) 已恢复系统默认（⌘Z 可撤销）")
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.showToast("恢复失败：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// ⌘Z：回退栈顶那条修改。之前有显式默认就设回去（系统会弹确认框），
+    /// 之前没有就摘记录恢复系统默认。回退动作不再压栈——撤销链只单向走，
+    /// 要再改回来请重新设置。
+    func undoLast() {
+        guard let record = undoStack.popLast() else { return }
+        let kind = record.kind
+        let displayID = record.displayID
+        let targetKey = record.previousAppKey
+        let targetName = record.previousName
+
+        showToast(targetKey != nil
+            ? "正在撤销 \(displayID) → \(targetName ?? "")…（请在系统弹窗中确认）"
+            : "正在撤销 \(displayID)，恢复系统默认…")
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                if let targetKey {
+                    try await Self.applyChange(appKey: targetKey, kind: kind)
+                } else {
+                    try LSKAssociation.clearUserDefault(for: kind)
+                }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    // 撤销前该行此刻的默认，作为最近修改记录的 from
+                    let currentName = self.rows.first { $0.kind == kind }?.defaultApp?.name
+                    self.recordChange(kind: kind, displayID: displayID,
+                                      fromName: currentName, toName: targetName ?? "系统默认")
+                    self.refreshRow(kind: kind)
+                    self.showToast("已撤销：\(displayID) → \(targetName ?? "系统默认")")
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.showToast("撤销失败：\(error.localizedDescription)")
+                }
             }
         }
     }
@@ -398,7 +518,8 @@ final class AssociationStore: ObservableObject {
         }
     }
 
-    /// 单行刷新（避免全量重载闪烁）
+    /// 单行刷新（避免全量重载闪烁）；顺带重算 isUserSet，
+    /// 「恢复系统默认」按钮随恢复动作即时消失
     private func refreshRow(kind: AssociationKind) {
         guard let index = rows.firstIndex(where: { $0.kind == kind }) else { return }
         let row = rows[index]
@@ -410,8 +531,11 @@ final class AssociationStore: ObservableObject {
             case .superType(let t): info = try? LSKAssociation.info(forType: t.rawValue)
             case .uti(let u): info = try? LSKAssociation.info(forType: u)
             }
+            let userSet = ((try? LSKDatabase.handlers()) ?? [])
+                .contains { $0.associationKind?.kindKey() == kind.kindKey() }
             let updated = Self.makeRow(
-                kind: row.kind, displayID: row.displayID, uti: info?.uti ?? row.uti, info: info)
+                kind: row.kind, displayID: row.displayID, uti: info?.uti ?? row.uti, info: info,
+                isUserSet: userSet)
             await MainActor.run { [weak self] in
                 self?.rows[index] = updated
             }

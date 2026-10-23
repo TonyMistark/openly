@@ -25,17 +25,27 @@ struct OpenlyApp: App {
                 .environmentObject(installer)
         }
         .commands {
-            AppMenus(updates: updates)
+            AppMenus(store: store, updates: updates)
         }
     }
 }
 
 /// Replaces the default About item with our panel (it adds the repository
-/// link and description) and slots "Check for Updates…" right below it.
+/// link and description), slots "Check for Updates…" right below it, and
+/// takes over the Undo slot — system text undo is useless here, while the
+/// association undo stack is this app's real ⌘Z.
 struct AppMenus: Commands {
+    @ObservedObject var store: AssociationStore
     let updates: UpdateChecker
 
     var body: some Commands {
+        CommandGroup(replacing: .undoRedo) {
+            Button(store.undoMenuTitle ?? "撤销") {
+                store.undoLast()
+            }
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(!store.canUndo)
+        }
         CommandGroup(replacing: .appInfo) {
             Button(t("About Openly")) { AboutPanel.show() }
         }

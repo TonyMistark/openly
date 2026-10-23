@@ -493,6 +493,19 @@ private struct EditPopoverContent: View {
 
             Divider()
 
+            // 只有用户显式设置过的类型才有「系统默认」可交还——
+            // 系统注册的固有默认没有「用户记录」可摘
+            if row.isUserSet {
+                Button {
+                    store.restoreSystemDefault(row)
+                } label: {
+                    Label("恢复系统默认", systemImage: "arrow.uturn.backward.circle")
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+
             Button {
                 browseForApp()
             } label: {
