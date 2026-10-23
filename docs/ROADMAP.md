@@ -57,9 +57,13 @@
 - [x] 应用图标（icns + iconset）
 - [x] `make-app.sh` / `make-dmg.sh` 打包脚本
 - [x] 空状态视图
+- [x] 设置窗口（语言 / 更新 / 关于，借鉴 wtmd 的单页 Form 布局）
+- [x] 检查更新：GitHub Releases API + 24h 节流 + 启动自动检查（可关）
+- [x] 一键更新：下载（分块落盘带进度）→ 挂载 dmg → 暂存校验版本 → 换原子换装 → 脱壳重启；失败退回 Finder
+- [x] 中英双语文案：`t()` 翻译层 + 代码内中文表（英文原文即键），设置页与更新链路全覆盖
+- [ ] 设置窗口里的 GUI 修改同步写回 `~/.config/infat/config.toml`
 - [ ] 异常检测：「非常规占用」（.html 非浏览器、.pdf 被脚本工具接管等）
 - [ ] 异常检测：「共享 UTI 联动提示」（yml / yaml 等成组类型行内 ⚠）
-- [ ] 设置窗口（是否把 GUI 修改同步写回 `~/.config/infat/config.toml`）
 - [ ] Developer ID 签名 + 公证
 - [ ] Homebrew cask
 - [ ] README 截图与动图
