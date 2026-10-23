@@ -47,6 +47,12 @@ struct AppMenus: Commands {
             .keyboardShortcut("z", modifiers: .command)
             .disabled(!store.canUndo)
         }
+        CommandGroup(after: .textEditing) {
+            Button(t("Search")) {
+                NotificationCenter.default.post(name: .focusAssociationSearch, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: .command)
+        }
         CommandGroup(replacing: .appInfo) {
             Button(t("About Openly")) { AboutPanel.show() }
         }

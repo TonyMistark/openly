@@ -24,11 +24,6 @@ struct ContentView: View {
             }
         }
         .navigationTitle("Openly")
-        .searchable(
-            text: $store.query,
-            placement: .toolbar,
-            prompt: "搜索扩展名、UTI 或应用"
-        )
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Picker("视图", selection: $store.viewMode) {
@@ -38,7 +33,10 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 150)
             }
-            ToolbarItemGroup {
+            ToolbarItem(placement: .principal) {
+                ToolbarSearchField(text: $store.query)
+            }
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     showExport = true
                 } label: {
