@@ -135,11 +135,12 @@ extension AssociationStore {
             // appName 可能是路径或名称，两者 LSKAppResolver 都接受
             guard let bundleID = try? LSKAppResolver.bundleID(forApp: appName) else { continue }
             let appRef = LSKAppResolver.appRef(forBundleID: bundleID)
-            let rows = entries.compactMap { entry in
-                rows.first(where: { $0.kind.kindKey() == entry.kind.kindKey() })
+            // 局部变量别叫 rows：会遮蔽 self.rows，旧版编译器推断不出闭包参数类型
+            let targetRows: [AssociationRow] = entries.compactMap { entry in
+                self.rows.first { $0.kind.kindKey() == entry.kind.kindKey() }
             }
-            guard !rows.isEmpty else { continue }
-            batchChange(rows, to: appRef)
+            guard !targetRows.isEmpty else { continue }
+            batchChange(targetRows, to: appRef)
         }
         // 未在当前列表中的类型（比较时被跳过的）交给 load() 重建
         DispatchQueue.main.asyncAfter(deadline: .now() + Double(all.count) * 1.5 + 1.0) { [weak self] in
