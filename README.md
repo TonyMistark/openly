@@ -4,7 +4,7 @@
 
 一个开源、原生、本地优先的 macOS 默认打开方式管理器。把散落在访达「显示简介」和系统设置深处的文件关联，收进一张可以搜索、可以批量改、可以反查、可以带走的表里。
 
-![Status](https://img.shields.io/badge/status-v0.2.0-green) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
+![Status](https://img.shields.io/badge/status-v0.3.0-green) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
 
 ## 为什么
 
@@ -32,6 +32,8 @@ Openly 把这件事做成一张表。
 ## 安装
 
 从 [Releases](https://github.com/TonyMistark/openly/releases) 下载最新的 `Openly-<版本>.dmg`，打开后把 Openly 拖进「应用程序」。
+
+国内网络下载 GitHub 慢的话，用 [Gitee 镜像](https://gitee.com/Micestark/openly/releases)：每次发布自动同步（tag、Release 说明与 dmg 附件一致）。装好之后应用内「检查更新」也支持双源，设置页里可以挑从 GitHub 或 Gitee 下载。
 
 本仓库没有 Developer ID 证书，产物是 **ad-hoc 签名、未公证**，新机器首次打开会被 Gatekeeper 拦下（macOS 15 起已不能用「右键 → 打开」绕过）：
 
