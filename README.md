@@ -4,7 +4,7 @@
 
 一个开源、原生、本地优先的 macOS 默认打开方式管理器。把散落在访达「显示简介」和系统设置深处的文件关联，收进一张可以搜索、可以批量改、可以反查、可以带走的表里。
 
-![Status](https://img.shields.io/badge/status-v0.1.0-green) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
+![Status](https://img.shields.io/badge/status-v0.2.0-green) ![License](https://img.shields.io/badge/license-MIT-blue) ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
 
 ## 为什么
 
