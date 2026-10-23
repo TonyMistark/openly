@@ -31,5 +31,10 @@ let package = Package(
             dependencies: ["LaunchServicesKit"],
             path: "Tests/LaunchServicesKitTests"
         ),
+        .testTarget(
+            name: "OpenlyTests",
+            dependencies: ["Openly"],
+            path: "Tests/OpenlyTests"
+        ),
     ]
 )

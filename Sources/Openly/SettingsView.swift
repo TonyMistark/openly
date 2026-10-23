@@ -88,15 +88,18 @@ struct SettingsView: View {
     @ViewBuilder
     private var updateAction: some View {
         switch (updates.status, installer.phase) {
-        case (.available(let version, let url, let asset), .idle):
-            Button(t("Update…")) {
-                if let asset {
-                    Task { await installer.run(asset: asset, version: version, releaseURL: url) }
-                } else {
-                    NSWorkspace.shared.open(url)
+        case (.available(let version, let sources), .idle):
+            HStack(spacing: 8) {
+                // Press = one-click install from the preferred mirror
+                // (always GitHub by configuration order).
+                Button(t("Update…")) {
+                    if let primary = sources.first {
+                        startUpdate(source: primary, version: version)
+                    }
                 }
+                .help(t("Download and install v{}, then relaunch", version))
+                sourceMenu(sources: sources, version: version)
             }
-            .help(t("Download and install v{}, then relaunch", version))
         case (_, .downloading(let fraction)):
             Text(t("Downloading {}%", Int(fraction * 100)))
                 .font(.callout.monospacedDigit())
@@ -107,19 +110,65 @@ struct SettingsView: View {
                 Text(t("Installing…")).font(.callout).foregroundStyle(.secondary)
             }
         case (_, .failed(let reason)):
-            if installer.downloadedDMG != nil {
-                Button(t("Reveal Download")) {
-                    installer.revealFallback()
-                }
-                .help(reason)
-            } else {
-                Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                if installer.downloadedDMG != nil {
+                    Button(t("Reveal Download")) {
+                        installer.revealFallback()
+                    }
                     .help(reason)
+                }
+                if let url = installer.lastReleaseURL {
+                    // The mirror the user tried failed: send them to its
+                    // release page, where the dmg can be fetched by hand.
+                    Button(t("Open Release Page")) {
+                        NSWorkspace.shared.open(url)
+                    }
+                    .help(t("Fetch the dmg from the release page: {}", url.absoluteString))
+                }
+                if installer.downloadedDMG == nil && installer.lastReleaseURL == nil {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
+                        .help(reason)
+                }
             }
         default:
             EmptyView()
         }
+    }
+
+    /// The "switch download source" menu: one install entry and one release
+    /// page entry per mirror. GitHub is flaky from some networks — Gitee is
+    /// the other road, and the user picks.
+    @ViewBuilder
+    private func sourceMenu(sources: [UpdateSource], version: String) -> some View {
+        Menu {
+            ForEach(Array(UpdateSource.pickerEntries(sources).enumerated()), id: \.offset) { _, entry in
+                if entry.canInstall {
+                    Button(t("Download from {}", entry.name)) {
+                        if let source = sources.first(where: { $0.name == entry.name }) {
+                            startUpdate(source: source, version: version)
+                        }
+                    }
+                }
+                Button(t("Open {} release page", entry.name)) {
+                    NSWorkspace.shared.open(entry.releaseURL)
+                }
+            }
+        } label: {
+            Label(t("Or download from…"), systemImage: "arrow.triangle.swap")
+        }
+        .menuStyle(.borderedButton)
+        .fixedSize()
+    }
+
+    /// One-click install when the mirror carries a dmg; fall back to its
+    /// release page when it does not.
+    private func startUpdate(source: UpdateSource, version: String) {
+        guard let asset = source.asset else {
+            NSWorkspace.shared.open(source.releaseURL)
+            return
+        }
+        Task { await installer.run(asset: asset, version: version, releaseURL: source.releaseURL) }
     }
 
     // MARK: About
