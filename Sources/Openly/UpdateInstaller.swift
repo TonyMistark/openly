@@ -77,11 +77,17 @@ final class UpdateInstaller: ObservableObject {
     /// Needed by the fallback: the last successfully landed dmg.
     private(set) var downloadedDMG: URL?
 
+    /// The release page of the mirror the user last tried to download from.
+    /// The UI's fallback exit when download or install fails — a working
+    /// mirror in a browser beats a dead progress bar.
+    private(set) var lastReleaseURL: URL?
+
     // MARK: Flow
 
     /// The press from the menu or the settings page. `version` verifies the landing spot afterwards.
     func run(asset: UpdateAsset, version: String, releaseURL: URL) async {
         guard !phase.isWorking else { return }
+        lastReleaseURL = releaseURL
 
         do {
             phase = .downloading(fraction: 0)
