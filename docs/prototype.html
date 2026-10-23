@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Openly · 默认打开方式管理器 — 交互原型</title>
+<style>
+  :root{
+    --blue:#0a7cff; --red:#ff3b30; --orange:#ff9500; --green:#34c759;
+    --win-bg:#ffffff; --sidebar-bg:rgba(242,242,247,.82); --sidebar-hover:rgba(0,0,0,.05);
+    --sidebar-active:#c8e0ff; --row-hover:rgba(0,0,0,.04); --row-selected:rgba(10,124,255,.10);
+    --text:#1d1d1f; --text-2:rgba(0,0,0,.55); --text-3:rgba(0,0,0,.35);
+    --line:rgba(0,0,0,.09); --tool-bg:rgba(246,246,248,.85);
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Helvetica Neue",sans-serif;
+    min-height:100vh;
+    background:linear-gradient(135deg,#8ea8d8 0%,#b8c9e6 25%,#e8c9c0 55%,#d9a7b8 80%,#8f7fb8 100%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 16px;
+    color:var(--text);
+  }
+  .caption{color:rgba(255,255,255,.92);font-size:13px;margin-top:16px;text-shadow:0 1px 3px rgba(0,0,0,.25);text-align:center;line-height:1.7}
+  .caption b{font-size:14px}
+
+  /* ───────── window ───────── */
+  .mac-window{
+    width:1080px;max-width:100%;height:700px;max-height:calc(100vh - 90px);
+    background:var(--win-bg);border-radius:11px;overflow:hidden;position:relative;
+    box-shadow:0 0 0 .5px rgba(0,0,0,.28),0 22px 70px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.28);
+    display:flex;flex-direction:column;
+  }
+  /* ───────── toolbar ───────── */
+  .toolbar{
+    height:52px;flex:0 0 52px;display:flex;align-items:center;gap:12px;padding:0 14px;
+    background:var(--tool-bg);backdrop-filter:blur(24px) saturate(1.6);
+    border-bottom:1px solid var(--line);z-index:30;
+  }
+  .traffic{display:flex;gap:8px;padding-right:4px}
+  .traffic span{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+  .traffic .r{background:#ff5f57}.traffic .y{background:#febc2e}.traffic .g{background:#28c840}
+  .tool-title{font-size:14px;font-weight:600;color:var(--text-2);white-space:nowrap}
+  .seg{display:flex;background:rgba(0,0,0,.06);border-radius:7px;padding:2px;margin:0 auto}
+  .seg button{
+    border:0;background:transparent;font-size:13px;font-weight:500;color:var(--text-2);
+    padding:3px 16px;border-radius:5px;cursor:pointer;transition:all .15s;
+  }
+  .seg button.on{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);color:var(--text)}
+  .search{
+    display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.05);border-radius:7px;
+    padding:4px 9px;width:190px;border:1px solid transparent;
+  }
+  .search:focus-within{background:#fff;border-color:var(--blue);box-shadow:0 0 0 3px rgba(10,124,255,.18)}
+  .search svg{flex:0 0 auto;opacity:.4}
+  .search input{border:0;outline:0;background:transparent;font-size:13px;width:100%;color:var(--text)}
+  .btn{
+    border:1px solid var(--line);background:linear-gradient(#fff,#f5f5f7);border-radius:7px;
+    font-size:13px;padding:4px 13px;cursor:pointer;color:var(--text);white-space:nowrap;
+    box-shadow:0 1px 2px rgba(0,0,0,.06);
+  }
+  .btn:hover{background:linear-gradient(#fff,#ececf0)}
+  .btn.primary{background:var(--blue);border-color:#0868d8;color:#fff;box-shadow:0 1px 3px rgba(10,124,255,.4)}
+  .btn.primary:hover{background:#2b8eff}
+  .btn.subtle{border-color:transparent;background:transparent;box-shadow:none;color:var(--blue);padding:4px 8px}
+  .btn.subtle:hover{background:rgba(10,124,255,.08)}
+  .btn:disabled{opacity:.4;cursor:default}
+
+  /* ───────── body ───────── */
+  .body{flex:1;display:flex;min-height:0}
+  .sidebar{
+    width:216px;flex:0 0 216px;background:var(--sidebar-bg);backdrop-filter:blur(24px) saturate(1.6);
+    border-right:1px solid var(--line);overflow-y:auto;padding:10px 10px 20px;
+  }
+  .sb-group{margin-bottom:14px}
+  .sb-title{font-size:11px;font-weight:600;color:var(--text-3);padding:6px 8px 4px;letter-spacing:.3px}
+  .sb-item{
+    display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:6px;cursor:pointer;
+    font-size:13px;color:var(--text);position:relative;
+  }
+  .sb-item:hover{background:var(--sidebar-hover)}
+  .sb-item.on{background:var(--sidebar-active)}
+  .sb-item .ico{width:18px;text-align:center;font-size:14px;flex:0 0 18px;line-height:1.2}
+  .sb-item .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sb-item .cnt{font-size:11px;color:var(--text-3);background:rgba(0,0,0,.05);border-radius:9px;padding:0 7px;line-height:17px}
+  .sb-item.on .cnt{background:rgba(10,124,255,.15);color:#0a5ec2}
+  .sb-item .appdot{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:12px;flex:0 0 20px}
+
+  /* ───────── main ───────── */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff}
+  .content{flex:1;overflow-y:auto;position:relative}
+  .tbl-head{
+    position:sticky;top:0;z-index:5;display:flex;align-items:center;height:34px;
+    background:rgba(250,250,252,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+    font-size:11px;font-weight:600;color:var(--text-3);padding:0 12px 0 4px;user-select:none;
+  }
+  .tbl-head .c-check{flex:0 0 44px;display:flex;justify-content:center}
+  .tbl-head .c-id{flex:0 0 240px;padding-left:2px;cursor:pointer}
+  .tbl-head .c-app{flex:1;cursor:pointer}
+  .tbl-head .c-cnt{flex:0 0 84px;cursor:pointer;text-align:right}
+  .tbl-head .c-more{flex:0 0 34px}
+  .tbl-head .sort-arrow{font-size:9px;margin-left:2px}
+
+  .row{
+    display:flex;align-items:center;height:40px;padding:0 12px 0 4px;border-bottom:1px solid rgba(0,0,0,.045);
+    cursor:pointer;transition:background .1s;
+  }
+  .row:hover{background:var(--row-hover)}
+  .row.sel{background:var(--row-selected)}
+  .row:has(.cb input:checked){background:var(--row-selected)}
+  .c-check{flex:0 0 44px;display:flex;justify-content:center}
+  .cb input{
+    appearance:none;width:15px;height:15px;border:1.2px solid rgba(0,0,0,.25);border-radius:3.5px;
+    background:#fff;cursor:pointer;transition:all .12s;position:relative;
+  }
+  .cb input:checked{background:var(--blue);border-color:var(--blue)}
+  .cb input:checked::after{content:"✓";color:#fff;font-size:11px;position:absolute;left:2px;top:-1.5px;font-weight:700}
+  .c-id{flex:0 0 240px;display:flex;align-items:center;gap:9px;min-width:0;padding-left:2px}
+  .type-badge{
+    width:26px;height:26px;border-radius:6px;flex:0 0 26px;display:flex;align-items:center;justify-content:center;
+    font-size:13px;color:#fff;font-weight:700;box-shadow:inset 0 -4px 8px rgba(0,0,0,.08),inset 0 1px 1px rgba(255,255,255,.4);
+  }
+  .id-main{font-size:13px;font-weight:600;font-family:var(--mono);white-space:nowrap}
+  .id-sub{font-size:10.5px;color:var(--text-3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-app{flex:1;display:flex;align-items:center;gap:7px;min-width:0}
+  .app-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 3px;border-radius:13px;background:rgba(0,0,0,.05);max-width:200px}
+  .app-chip:hover{background:rgba(10,124,255,.10)}
+  .app-icon{width:20px;height:20px;border-radius:5px;flex:0 0 20px;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 1px 2px rgba(0,0,0,.15)}
+  .app-chip .nm{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .none-badge{font-size:11px;color:var(--red);font-weight:600;padding:1px 8px;border-radius:9px;background:rgba(255,59,48,.10)}
+  .warn{font-size:11px;color:var(--orange);cursor:help;flex:0 0 auto}
+  .c-cnt{flex:0 0 84px;text-align:right;font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
+  .c-more{flex:0 0 34px;text-align:center;color:var(--text-3);font-size:12px}
+  .recent-mark{font-size:9px;color:var(--blue);border:1px solid rgba(10,124,255,.35);border-radius:6px;padding:0 5px;line-height:15px;margin-left:6px;flex:0 0 auto}
+  .mod-chip{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3);margin-left:4px;flex:0 0 auto}
+  .mod-chip .arrow{color:var(--text-3);font-family:var(--mono);font-size:10px}
+
+  .empty{padding:70px 20px;text-align:center;color:var(--text-3)}
+  .empty .big{font-size:34px;margin-bottom:10px}
+
+  /* app browser header */
+  .app-hero{
+    display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(rgba(246,246,250,.6),rgba(255,255,255,0));
+  }
+  .app-hero .big-icon{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:inset 0 1px 1px rgba(255,255,255,.4),0 3px 8px rgba(0,0,0,.18)}
+  .app-hero h2{font-size:17px}
+  .app-hero .bid{font-size:11px;color:var(--text-3);font-family:var(--mono);margin-top:2px}
+  .app-hero .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+  /* ───────── status / batch bar ───────── */
+  .statusbar{
+    flex:0 0 30px;display:flex;align-items:center;padding:0 16px;border-top:1px solid var(--line);
+    font-size:11.5px;color:var(--text-3);background:rgba(250,250,252,.9);gap:14px;z-index:25;
+  }
+  .statusbar .dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .batchbar{
+    flex:0 0 46px;display:flex;align-items:center;gap:10px;padding:0 16px;border-top:1px solid var(--line);
+    background:rgba(238,244,255,.95);backdrop-filter:blur(20px);font-size:13px;z-index:26;
+  }
+  .batchbar b{color:#0a5ec2}
+  .batchbar .sp{flex:1}
+
+  /* ───────── popover ───────── */
+  .popover{
+    position:fixed;z-index:100;width:320px;background:rgba(250,250,252,.97);backdrop-filter:blur(30px) saturate(1.8);
+    border-radius:11px;box-shadow:0 0 0 .5px rgba(0,0,0,.15),0 14px 44px rgba(0,0,0,.32);
+    overflow:hidden;animation:pop .16s cubic-bezier(.2,1.2,.4,1);transform-origin:top left;
+  }
+  @keyframes pop{from{opacity:0;transform:scale(.92) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .pop-title{font-size:12px;font-weight:600;color:var(--text-2);padding:11px 14px 7px;display:flex;align-items:baseline;gap:8px}
+  .pop-title .code{font-family:var(--mono);color:var(--text)}
+  .pop-title .uti{font-size:10px;color:var(--text-3);font-family:var(--mono);font-weight:400}
+  .pop-list{max-height:264px;overflow-y:auto;padding:0 7px 7px}
+  .pop-app{
+    display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:7px;cursor:pointer;
+  }
+  .pop-app:hover{background:var(--blue);color:#fff}
+  .pop-app:hover .sub{color:rgba(255,255,255,.75)}
+  .pop-app .app-icon{width:24px;height:24px;border-radius:6px;font-size:14px;flex:0 0 24px}
+  .pop-app .n{font-size:13px;font-weight:500}
+  .pop-app .sub{font-size:10.5px;color:var(--text-3);font-family:var(--mono);margin-top:1px}
+  .pop-app .chk{margin-left:auto;color:var(--blue);font-weight:700;font-size:13px}
+  .pop-app:hover .chk{color:#fff}
+  .pop-actions{border-top:1px solid var(--line);padding:6px 7px}
+  .pop-act{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--text)}
+  .pop-act:hover{background:rgba(0,0,0,.05)}
+  .pop-act.danger{color:var(--red)}
+  .pop-act.danger:hover{background:rgba(255,59,48,.08)}
+  .pop-note{font-size:10.5px;color:var(--text-3);padding:6px 14px 10px;line-height:1.5;border-top:1px solid var(--line);background:rgba(0,0,0,.02)}
+  .popover .arrow{position:absolute;top:-6px;left:26px;width:14px;height:14px;background:rgba(250,250,252,.97);transform:rotate(45deg);border-radius:3px;box-shadow:-1px -1px 0 0 rgba(0,0,0,.06)}
+
+  /* ───────── modal ───────── */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:flex;align-items:center;justify-content:center;animation:fade .15s}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .sheet{
+    width:460px;max-width:92vw;max-height:80vh;background:rgba(246,246,248,.98);backdrop-filter:blur(40px);
+    border-radius:13px;box-shadow:0 0 0 .5px rgba(0,0,0,.2),0 24px 70px rgba(0,0,0,.5);
+    display:flex;flex-direction:column;overflow:hidden;animation:pop .18s cubic-bezier(.2,1.2,.4,1);
+  }
+  .sheet-head{padding:20px 20px 12px;text-align:center}
+  .sheet-head h3{font-size:15px}
+  .sheet-head p{font-size:12px;color:var(--text-2);margin-top:4px;line-height:1.5}
+  .sheet-body{flex:1;overflow-y:auto;padding:4px 14px 14px;min-height:120px}
+  .sheet-foot{display:flex;justify-content:center;gap:10px;padding:0 20px 18px}
+  .sheet-foot .btn{padding:6px 22px;font-size:13px}
+  .toml{
+    font-family:var(--mono);font-size:11.5px;line-height:1.65;background:#1e1e24;color:#d8d8de;
+    border-radius:9px;padding:14px 16px;white-space:pre;overflow:auto;max-height:380px;
+  }
+  .toml .k{color:#7dc4ff}.toml .v{color:#ffd479}.toml .c{color:#6b6b78}
+
+  /* toast */
+  .toast{
+    position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:300;
+    background:rgba(30,30,34,.94);color:#fff;font-size:13px;padding:9px 18px;border-radius:20px;
+    box-shadow:0 8px 28px rgba(0,0,0,.4);display:flex;align-items:center;gap:8px;
+    animation:toastIn .25s cubic-bezier(.2,1.2,.4,1);max-width:70vw;
+  }
+  .toast .ok{color:var(--green);font-weight:700}
+  @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  .toast.out{animation:toastOut .3s forwards}
+  @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(8px)}}
+
+  ::-webkit-scrollbar{width:9px}
+  ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.22);border-radius:5px;border:2px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.35);background-clip:content-box;border:2px solid transparent}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .hint-strip{
+    display:flex;gap:22px;padding:0 20px;height:32px;align-items:center;border-bottom:1px solid var(--line);
+    font-size:11px;color:var(--text-3);background:rgba(250,250,252,.9);flex:0 0 32px;
+  }
+  .hint-strip b{color:var(--text-2);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="mac-window" id="win">
+  <!-- toolbar -->
+  <div class="toolbar">
+    <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+    <div class="tool-title" id="toolTitle">Openly</div>
+    <div class="seg" id="segView">
+      <button class="on" data-view="type">按类型</button>
+      <button data-view="app">按应用</button>
+    </div>
+    <label class="search">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="6.8" cy="6.8" r="5" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 10.8L14.4 14.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <input id="searchInput" placeholder="搜索扩展名、UTI 或应用">
+    </label>
+    <button class="btn" id="btnImport">导入</button>
+    <button class="btn" id="btnExport">导出配置…</button>
+  </div>
+
+  <div class="body">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main">
+      <div class="hint-strip" id="hintStrip"></div>
+      <div class="content" id="content"></div>
+    </div>
+  </div>
+
+  <div class="statusbar" id="statusbar"></div>
+  <div class="batchbar" id="batchbar" style="display:none"></div>
+</div>
+
+<div class="caption">
+  <b>Openly · 高保真交互原型</b><br>
+  点击行修改默认应用 · 勾选多行批量设置 · 顶栏切换「按类型 / 按应用」· 导出生成 infat 兼容 TOML
+</div>
+
+<script>
+/* ═══════════════ 数据 ═══════════════ */
+const APPS = {
+  preview:   {name:'预览',        bid:'com.apple.Preview',          ic:'🖼', bg:'#3d7ff2'},
+  safari:    {name:'Safari',      bid:'com.apple.Safari',           ic:'🧭', bg:'#19a1f5'},
+  arc:       {name:'Arc',         bid:'company.thebrowser.Browser', ic:'🌈', bg:'#8b5cf6'},
+  chrome:    {name:'Chrome',      bid:'com.google.Chrome',          ic:'🌐', bg:'#31c45b'},
+  textedit:  {name:'文本编辑',     bid:'com.apple.TextEdit',         ic:'📝', bg:'#f2f2f4'},
+  pages:     {name:'Pages',       bid:'com.apple.iWork.Pages',      ic:'📄', bg:'#ff9f0a'},
+  word:      {name:'Microsoft Word', bid:'com.microsoft.Word',      ic:'📄', bg:'#2b579a'},
+  typora:    {name:'Typora',      bid:'abnerworks.Typora',          ic:'✍️', bg:'#64748b'},
+  vscode:    {name:'VS Code',     bid:'com.microsoft.VSCode',       ic:'⬛', bg:'#1f6fd6'},
+  xcode:     {name:'Xcode',       bid:'com.apple.dt.Xcode',         ic:'🔨', bg:'#3f7efb'},
+  sublime:   {name:'Sublime Text',bid:'com.sublimetext.4',          ic:'🅼',  bg:'#e8793a'},
+  terminal:  {name:'终端',        bid:'com.apple.Terminal',         ic:'⌨️', bg:'#2d2d2f'},
+  quicktime: {name:'QuickTime',   bid:'com.apple.QuickTimePlayerX', ic:'▶️', bg:'#4f9cf5'},
+  iina:      {name:'IINA',        bid:'com.colliderli.iina',        ic:'🎬', bg:'#f05133'},
+  music:     {name:'音乐',        bid:'com.apple.Music',            ic:'🎵', bg:'#fc4f5e'},
+  archive:   {name:'归档实用工具',  bid:'com.apple.archiveutility',  ic:'📦', bg:'#a1a1aa'},
+  betterzip: {name:'BetterZip',   bid:'com.macitbetter.betterzip',  ic:'🗜️', bg:'#5b8def'},
+  mail:      {name:'邮件',        bid:'com.apple.mail',             ic:'✉️', bg:'#33a2f5'},
+  notes:     {name:'备忘录',       bid:'com.apple.Notes',           ic:'🗒️', bg:'#ffd426'},
+  pixelmator:{name:'Pixelmator Pro', bid:'com.pixelmatorteam.pixelmator', ic:'🎨', bg:'#7c5cff'},
+  figma:     {name:'Figma',       bid:'com.figma.Desktop',          ic:'🖌️', bg:'#a259ff'},
+  finder:    {name:'访达',        bid:'com.apple.finder',           ic:'🗂️', bg:'#3aa2eb'},
+  docker:    {name:'Docker',      bid:'com.docker.docker',          ic:'🐳', bg:'#2496ed'},
+  installer: {name:'安装器',      bid:'com.apple.installer',        ic:'⚙️', bg:'#8e8e93'},
+  scripteditor:{name:'脚本编辑器', bid:'com.apple.ScriptEditor',    ic:'📜', bg:'#8e8e93'},
+};
+
+const CATS = {
+  doc:   {label:'文档',   ic:'📄', bg:'#3b82f6'},
+  image: {label:'图片',   ic:'🖼', bg:'#f59e0b'},
+  audio: {label:'音频',   ic:'🎵', bg:'#ec4899'},
+  video: {label:'视频',   ic:'🎬', bg:'#ef4444'},
+  archive:{label:'归档',  ic:'📦', bg:'#8b5cf6'},
+  code:  {label:'源代码', ic:'</>',bg:'#10b981'},
+  sys:   {label:'系统',   ic:'⚙️', bg:'#64748b'},
+  scheme:{label:'URL Scheme', ic:'🔗', bg:'#0ea5e9'},
+};
+
+/* kind: ext | type | scheme  ·  def: app key | null  ·  apps: 注册应用（含 def） */
+const DATA = [
+  {kind:'ext',tag:'txt',  uti:'public.plain-text',            cat:'doc',   def:'textedit', apps:['textedit','vscode','sublime','typora','pages']},
+  {kind:'ext',tag:'md',   uti:'net.daringfireball.markdown',  cat:'code',  def:'typora',   apps:['typora','vscode','xcode','sublime','textedit','notes']},
+  {kind:'ext',tag:'pdf',  uti:'com.adobe.pdf',                cat:'doc',   def:'preview',  apps:['preview','arc','chrome','safari','vscode','word']},
+  {kind:'ext',tag:'docx', uti:'org.openxmlformats.wordprocessingml.document',cat:'doc',def:'pages',apps:['pages','word','preview','textedit']},
+  {kind:'ext',tag:'doc',  uti:'com.microsoft.word.doc',       cat:'doc',   def:'word',     apps:['word','pages','preview']},
+  {kind:'ext',tag:'rtf',  uti:'public.rtf',                   cat:'doc',   def:'textedit', apps:['textedit','pages','word']},
+  {kind:'ext',tag:'csv',  uti:'public.comma-separated-values-text',cat:'doc',def:'vscode', apps:['vscode','pages','textedit','preview']},
+  {kind:'ext',tag:'html', uti:'public.html → http scheme',    cat:'doc',   def:'safari',   apps:['safari','arc','chrome','vscode','textedit'],shared:'http',note:'由 http/https URL scheme 联动控制'},
+  {kind:'ext',tag:'png',  uti:'public.png',                   cat:'image', def:'preview',  apps:['preview','pixelmator','figma','safari','chrome']},
+  {kind:'ext',tag:'jpg',  uti:'public.jpeg',                  cat:'image', def:'preview',  apps:['preview','pixelmator','figma','chrome']},
+  {kind:'ext',tag:'gif',  uti:'com.compuserve.gif',           cat:'image', def:'preview',  apps:['preview','chrome','safari']},
+  {kind:'ext',tag:'svg',  uti:'public.svg-image',             cat:'image', def:'figma',    apps:['figma','safari','chrome','preview','vscode']},
+  {kind:'ext',tag:'heic', uti:'public.heic',                  cat:'image', def:'preview',  apps:['preview','pixelmator']},
+  {kind:'ext',tag:'psd',  uti:'com.adobe.photoshop-image',    cat:'image', def:'pixelmator',apps:['pixelmator','preview']},
+  {kind:'ext',tag:'mp3',  uti:'public.mp3',                   cat:'audio', def:'music',    apps:['music','iina','quicktime','vscode']},
+  {kind:'ext',tag:'wav',  uti:'com.microsoft.waveform-audio', cat:'audio', def:'music',    apps:['music','quicktime','iina']},
+  {kind:'ext',tag:'flac', uti:'org.xiph.flac',                cat:'audio', def:'iina',     apps:['iina','music','quicktime']},
+  {kind:'ext',tag:'m4a',  uti:'public.mpeg-4-audio',          cat:'audio', def:'music',    apps:['music','quicktime','iina']},
+  {kind:'ext',tag:'mp4',  uti:'public.mpeg-4',                cat:'video', def:'iina',     apps:['iina','quicktime','vscode','music']},
+  {kind:'ext',tag:'mov',  uti:'com.apple.quicktime-movie',    cat:'video', def:'quicktime',apps:['quicktime','iina','vscode']},
+  {kind:'ext',tag:'mkv',  uti:'org.matroska.mkv',             cat:'video', def:'iina',     apps:['iina','quicktime']},
+  {kind:'ext',tag:'webm', uti:'org.webmproject.webm',         cat:'video', def:'iina',     apps:['iina','chrome']},
+  {kind:'ext',tag:'zip',  uti:'public.zip-archive',           cat:'archive',def:'archive', apps:['archive','betterzip','finder']},
+  {kind:'ext',tag:'tar',  uti:'public.tar-archive',           cat:'archive',def:'archive', apps:['archive','betterzip','terminal']},
+  {kind:'ext',tag:'gz',   uti:'org.gnu.gnu-zip-archive',      cat:'archive',def:'archive', apps:['archive','betterzip','terminal']},
+  {kind:'ext',tag:'dmg',  uti:'com.apple.disk-image',         cat:'sys',   def:'installer',apps:['installer','finder','archive']},
+  {kind:'ext',tag:'pkg',  uti:'com.apple.installer-package-archive',cat:'sys',def:'installer',apps:['installer']},
+  {kind:'ext',tag:'app',  uti:'com.apple.application-bundle', cat:'sys',   def:'finder',   apps:['finder']},
+  {kind:'ext',tag:'json', uti:'public.json',                  cat:'code',  def:'vscode',   apps:['vscode','sublime','xcode','textedit','safari']},
+  {kind:'ext',tag:'yml',  uti:'org.yaml.yaml-text',           cat:'code',  def:'vscode',   apps:['vscode','sublime','xcode','textedit'],shared:'yaml',note:'与 .yaml 共享同一 UTI，改动联动'},
+  {kind:'ext',tag:'yaml', uti:'org.yaml.yaml-text',           cat:'code',  def:'vscode',   apps:['vscode','sublime','xcode','textedit'],shared:'yaml',note:'与 .yml 共享同一 UTI，改动联动'},
+  {kind:'ext',tag:'toml', uti:'org.toml.toml',                cat:'code',  def:'vscode',   apps:['vscode','sublime','xcode']},
+  {kind:'ext',tag:'swift',uti:'public.swift-source',          cat:'code',  def:'xcode',    apps:['xcode','vscode','sublime','textedit']},
+  {kind:'ext',tag:'rs',   uti:'public.rust-source',           cat:'code',  def:'vscode',   apps:['vscode','xcode','sublime','textedit']},
+  {kind:'ext',tag:'py',   uti:'public.python-script',         cat:'code',  def:'vscode',   apps:['vscode','xcode','sublime','terminal','textedit']},
+  {kind:'ext',tag:'sh',   uti:'public.shell-script',          cat:'code',  def:'terminal', apps:['terminal','vscode','sublime','textedit']},
+  {kind:'ext',tag:'scpt', uti:'com.apple.applescript.text',   cat:'code',  def:'scripteditor',apps:['scripteditor','textedit','vscode']},
+  {kind:'ext',tag:'ts',   uti:'com.microsoft.typescript',     cat:'code',  def:'vscode',   apps:['vscode','sublime','xcode']},
+  {kind:'ext',tag:'conf', uti:'public.config-file',           cat:'sys',   def:null,       apps:['vscode','sublime','textedit','terminal'],broken:true},
+  {kind:'ext',tag:'log',  uti:'public.log',                   cat:'sys',   def:null,       apps:['terminal','vscode','textedit'],broken:true},
+  {kind:'ext',tag:'plist',uti:'com.apple.property-list',      cat:'sys',   def:'xcode',    apps:['xcode','vscode','textedit','scripteditor']},
+  {kind:'scheme',tag:'http', uti:null, cat:'scheme', def:'safari', apps:['safari','arc','chrome','vscode'],shared:'http',note:'与 https 共享 handler'},
+  {kind:'scheme',tag:'https',uti:null, cat:'scheme', def:'safari', apps:['safari','arc','chrome','vscode'],shared:'http',note:'与 http 共享 handler'},
+  {kind:'scheme',tag:'mailto',uti:null,cat:'scheme', def:'mail',   apps:['mail','notes']},
+  {kind:'scheme',tag:'ssh',  uti:null, cat:'scheme', def:'terminal',apps:['terminal','vscode']},
+  {kind:'scheme',tag:'docker',uti:null,cat:'scheme', def:'docker', apps:['docker']},
+  {kind:'scheme',tag:'obsidian',uti:null,cat:'scheme',def:null,    apps:['chrome'],broken:true},
+];
+DATA.forEach((d,i)=>{d.id=i;d.mod=null;});
+
+/* ═══════════════ 状态 ═══════════════ */
+const S = {
+  view:'type',            // type | app
+  cat:'all',              // 当前侧栏选中
+  appSel:null,            // 应用视图选中的 app
+  q:'',
+  sel:new Set(),          // 勾选的行
+  lastIdx:null,
+  recent:[],              // 最近修改 [{id, from, to}]
+  sortKey:'id', sortAsc:true,
+};
+
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const kindLabel = d=> d.kind==='ext' ? '.'+d.tag : d.kind==='scheme' ? d.tag+':' : d.tag;
+const dispId = d=> d.kind==='ext' ? '.'+d.tag : d.kind==='scheme' ? d.tag+':' : d.tag;
+const appName = k=>k?APPS[k].name:'';
+
+/* ═══════════════ 侧栏 ═══════════════ */
+function catCount(cat){ return DATA.filter(d=>d.cat===cat).length; }
+function renderSidebar(){
+  const sb = $('#sidebar');
+  if(S.view==='type'){
+    const groups = [
+      {title:'智能列表', items:[
+        {key:'all',ic:'🗃',lbl:'全部关联'},
+        {key:'broken',ic:'⚠️',lbl:'无默认应用'},
+        {key:'recent',ic:'🕘',lbl:'最近修改'},
+      ]},
+      {title:'文件类别', items:Object.keys(CATS).filter(c=>c!=='scheme').map(c=>({key:'cat:'+c,ic:CATS[c].ic,lbl:CATS[c].lbl}))},
+      {title:'链接协议', items:[{key:'cat:scheme',ic:'🔗',lbl:'URL Scheme'}]},
+    ];
+    sb.innerHTML = groups.map(g=>`
+      <div class="sb-group">
+        <div class="sb-title">${g.title}</div>
+        ${g.items.map(it=>{
+          let cnt=it.key==='all'?DATA.length:it.key==='broken'?DATA.filter(d=>!d.def).length:it.key==='recent'?S.recent.length:catCount(it.key.slice(4));
+          return `<div class="sb-item ${S.cat===it.key?'on':''}" data-key="${it.key}">
+            <span class="ico">${it.ic}</span><span class="lbl">${it.lbl}</span><span class="cnt">${cnt}</span></div>`;
+        }).join('')}
+      </div>`).join('');
+    sb.querySelectorAll('.sb-item').forEach(el=>el.onclick=()=>{
+      S.cat=el.dataset.key; S.appSel=null; renderSidebar(); renderMain();
+    });
+  } else {
+    // 按应用：侧栏列出所有作为默认出现的应用，按占用数排序
+    const counts={};
+    DATA.forEach(d=>{ if(d.def) counts[d.def]=(counts[d.def]||0)+1; });
+    const list=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    if(!S.appSel||!counts[S.appSel]) S.appSel=list[0]?.[0]||null;
+    sb.innerHTML=`
+      <div class="sb-group">
+        <div class="sb-title">应用（按接管数量）</div>
+        ${list.map(([k,c])=>`
+          <div class="sb-item ${S.appSel===k?'on':''}" data-app="${k}">
+            <span class="appdot" style="background:${APPS[k].bg}">${APPS[k].ic}</span>
+            <span class="lbl">${esc(APPS[k].name)}</span><span class="cnt">${c}</span></div>`).join('')}
+        <div class="sb-title" style="margin-top:10px">未接管任何类型</div>
+        ${Object.keys(APPS).filter(k=>!counts[k]).map(k=>`
+          <div class="sb-item" style="opacity:.5" data-app="${k}">
+            <span class="appdot" style="background:${APPS[k].bg}">${APPS[k].ic}</span>
+            <span class="lbl">${esc(APPS[k].name)}</span></div>`).join('')}
+      </div>`;
+    sb.querySelectorAll('.sb-item[data-app]').forEach(el=>el.onclick=()=>{
+      S.appSel=el.dataset.app; renderSidebar(); renderMain();
+    });
+  }
+}
+
+/* ═══════════════ 主区 ═══════════════ */
+function visibleRows(){
+  let rows = DATA.slice();
+  if(S.view==='app'){ rows = rows.filter(d=>d.def===S.appSel); }
+  else{
+    if(S.cat==='broken') rows=rows.filter(d=>!d.def);
+    else if(S.cat==='recent') rows=S.recent.map(r=>DATA[r.id]);
+    else if(S.cat.startsWith('cat:')) rows=rows.filter(d=>d.cat===S.cat.slice(4));
+  }
+  if(S.q){
+    const q=S.q.toLowerCase();
+    rows=rows.filter(d=>dispId(d).toLowerCase().includes(q)||(d.uti||'').toLowerCase().includes(q)||appName(d.def).toLowerCase().includes(q)||d.apps.some(a=>appName(a).toLowerCase().includes(q)));
+  }
+  return rows;
+}
+
+function sortArrow(key){ return S.sortKey===key?`<span class="sort-arrow">${S.sortAsc?'▲':'▼'}</span>`:''; }
+
+function rowHtml(d){
+  const cat=CATS[d.cat];
+  const badgeTxt = d.kind==='ext'? d.tag.slice(0,4) : d.kind==='scheme'?'://':d.tag.slice(0,2);
+  const appChip = d.def
+    ? `<span class="app-chip"><span class="app-icon" style="background:${APPS[d.def].bg}">${APPS[d.def].ic}</span><span class="nm">${esc(APPS[d.def].name)}</span></span>`
+    : `<span class="none-badge">无默认</span>`;
+  const warnIcon = (d.shared||d.note)?`<span class="warn" title="${esc(d.note||'联动类型')}">⚠︎</span>`:'';
+  const recentChip = d.mod?`<span class="recent-mark">已修改</span>`:'';
+  const modChip = d.mod?`<span class="mod-chip"><span class="arrow">${esc(d.mod.from||'无')} → ${esc(d.mod.to)}</span></span>`:'';
+  return `<div class="row ${S.sel.has(d.id)?'sel':''}" data-id="${d.id}">
+    <div class="c-check cb"><input type="checkbox" data-cb="${d.id}" ${S.sel.has(d.id)?'checked':''}></div>
+    <div class="c-id">
+      <span class="type-badge" style="background:${cat.bg}">${esc(badgeTxt)}</span>
+      <span style="min-width:0">
+        <div class="id-main">${esc(dispId(d))}${recentChip}</div>
+        <div class="id-sub">${esc(d.uti||'URL scheme')}</div>
+      </span>
+    </div>
+    <div class="c-app">${appChip}${warnIcon}${modChip}</div>
+    <div class="c-cnt">${d.apps.length} 个应用</div>
+    <div class="c-more">›</div>
+  </div>`;
+}
+
+function renderMain(){
+  const content=$('#content');
+  if(S.view==='app' && S.appSel){
+    const a=APPS[S.appSel];
+    const rows=visibleRows();
+    content.innerHTML=`
+      <div class="app-hero">
+        <div class="big-icon" style="background:${a.bg}">${a.ic}</div>
+        <div><h2>${esc(a.name)}</h2><div class="bid">${esc(a.bid)}</div></div>
+        <div class="right">
+          <span style="font-size:12px;color:var(--text-3)">作为默认打开方式接管 ${rows.length} 个类型</span>
+          <button class="btn" id="btnTransfer" ${rows.length? '':'disabled'}>全部转移给…</button>
+        </div>
+      </div>
+      ${tableHtml(rows)}
+      ${rows.length?'':'<div class="empty"><div class="big">🫧</div>该应用未接管任何类型的默认打开方式</div>'}`;
+    const t=$('#btnTransfer'); if(t) t.onclick=()=>openBatchModal([...S.sel].length?[...S.sel]:rows.map(r=>r.id),true);
+  } else {
+    const rows=visibleRows();
+    const title = S.cat==='recent' ? '最近修改（⌘Z 可撤销）' : null;
+    content.innerHTML = (title?`<div style="padding:12px 20px 4px;font-size:12px;color:var(--text-3)">${title}</div>`:'') + tableHtml(rows) +
+      (rows.length?'':`<div class="empty"><div class="big">🔍</div>没有匹配的关联<br><span style="font-size:12px">试试搜索其他扩展名，或切换侧栏分类</span></div>`);
+  }
+  bindRows();
+  renderHintStrip(rows_length());
+  renderStatus();
+}
+function rows_length(){return visibleRows().length;}
+function tableHtml(rows){
+  return `<div class="tbl-head">
+    <div class="c-check cb"><input type="checkbox" id="cbAll" ${rows.length&&rows.every(d=>S.sel.has(d.id))?'checked':''}></div>
+    <div class="c-id" data-sort="id">类型 / 扩展名 ${sortArrow('id')}</div>
+    <div class="c-app" data-sort="app">默认打开应用 ${sortArrow('app')}</div>
+    <div class="c-cnt" data-sort="cnt">注册应用 ${sortArrow('cnt')}</div>
+    <div class="c-more"></div>
+  </div>
+  <div id="rowsBox">${rows.map(rowHtml).join('')}</div>`;
+}
+
+function renderHintStrip(n){
+  const hints = S.view==='type'
+    ? [`<span><b>${n}</b> 个关联</span>`,
+       `<span>点击行 → <b>修改默认应用</b></span>`,
+       `<span>勾选多行 → <b>批量设置</b>（⇧ 连选）</span>`,
+       `<span>⚠︎ = 联动类型（如 yml/yaml、html→http）</span>`]
+    : [`<span><b>${esc(S.appSel?APPS[S.appSel].name:'')}</b> 接管 <b>${n}</b> 个类型的默认打开方式</span>`,
+       `<span>卸载或更换该应用前，可先把这些类型<b>全部转移</b>给其他应用</span>`];
+  $('#hintStrip').innerHTML = hints.join('');
+}
+
+function renderStatus(){
+  const sb=$('#statusbar');
+  if(S.sel.size){ sb.style.display='none'; const bb=$('#batchbar'); bb.style.display='flex';
+    bb.innerHTML=`<span>已选择 <b>${S.sel.size}</b> 项</span>
+      <button class="btn primary" id="bSet">设为默认应用…</button>
+      <button class="btn" id="bReset">恢复系统默认</button>
+      <span class="sp"></span><button class="btn subtle" id="bClear">取消选择</button>`;
+    $('#bSet').onclick=()=>openBatchModal([...S.sel]);
+    $('#bReset').onclick=()=>{ batchApply(null); };
+    $('#bClear').onclick=()=>{S.sel.clear();S.lastIdx=null;renderMain();};
+    return;
+  }
+  sb.style.display='flex'; $('#batchbar').style.display='none';
+  const now=new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+  sb.innerHTML=`<span class="dot"></span><span>Launch Services 数据库 · 已同步</span>
+    <span>上次刷新 ${now}</span><span class="sp" style="flex:1"></span>
+    <span>兼容 infat · ${DATA.length} 条关联</span>`;
+}
+
+/* ═══════════════ 行事件 ═══════════════ */
+function bindRows(){
+  document.querySelectorAll('#rowsBox .row').forEach(el=>{
+    const id=+el.dataset.id;
+    el.onclick=e=>{
+      if(e.target.closest('input[type=checkbox]')) return;
+      openPopover(DATA[id], el);
+    };
+  });
+  document.querySelectorAll('#rowsBox input[data-cb]').forEach(cb=>{
+    cb.onclick=e=>e.stopPropagation();
+    cb.onchange=e=>{
+      const id=+cb.dataset.cb;
+      if(e.shiftKey && S.lastIdx!=null){
+        const rows=visibleRows().map(r=>r.id);
+        const a=Math.min(rows.indexOf(S.lastIdx),rows.indexOf(id)),b=Math.max(rows.indexOf(S.lastIdx),rows.indexOf(id));
+        for(let i=a;i<=b;i++) S.sel.add(rows[i]);
+      } else {
+        cb.checked?S.sel.add(id):S.sel.delete(id); S.lastIdx=id;
+      }
+      renderMain();
+    };
+  });
+  const all=$('#cbAll');
+  if(all) all.onchange=()=>{
+    const rows=visibleRows();
+    if(all.checked) rows.forEach(d=>S.sel.add(d.id)); else rows.forEach(d=>S.sel.delete(d.id));
+    renderMain();
+  };
+  document.querySelectorAll('.tbl-head [data-sort]').forEach(h=>{
+    h.onclick=()=>{ const k=h.dataset.sort;
+      if(S.sortKey===k) S.sortAsc=!S.sortAsc; else {S.sortKey=k;S.sortAsc=true;}
+      sortData(); renderMain();
+    };
+  });
+}
+function sortData(){
+  DATA.sort((a,b)=>{
+    let v;
+    if(S.sortKey==='app') v=(appName(a.def)||'zzz').localeCompare(appName(b.def)||'zzz');
+    else if(S.sortKey==='cnt') v=b.apps.length-a.apps.length;
+    else v=0;
+    if(!S.sortAsc) v=-v;
+    return v===0 ? (dispId(a)>dispId(b)?1:-1) : v;
+  });
+}
+
+/* ═══════════════ 编辑 popover ═══════════════ */
+let popEl=null;
+function closePopover(){ if(popEl){popEl.remove();popEl=null;} }
+document.addEventListener('pointerdown',e=>{ if(popEl&&!popEl.contains(e.target)&&!e.target.closest('.row')) closePopover(); });
+
+function openPopover(d, anchor){
+  closePopover();
+  popEl=document.createElement('div');
+  popEl.className='popover';
+  popEl.innerHTML=`
+    <div class="arrow"></div>
+    <div class="pop-title"><span class="code">${esc(dispId(d))}</span>
+      <span class="uti">${esc(d.uti||'URL scheme handler')}</span></div>
+    <div class="pop-list">
+      ${d.apps.map(k=>`
+        <div class="pop-app" data-app="${k}">
+          <span class="app-icon" style="background:${APPS[k].bg}">${APPS[k].ic}</span>
+          <span><div class="n">${esc(APPS[k].name)}</div><div class="sub">${esc(APPS[k].bid)}</div></span>
+          ${d.def===k?'<span class="chk">✓</span>':''}
+        </div>`).join('')}
+    </div>
+    <div class="pop-actions">
+      <div class="pop-act" data-act="browse">🔍 浏览其他应用…</div>
+      ${d.def?'<div class="pop-act danger" data-act="reset">↩︎ 恢复系统默认</div>':''}
+    </div>
+    ${d.note||d.shared?`<div class="pop-note">⚠︎ ${esc(d.note||'联动类型')}，修改将同步生效。</div>`:''}`;
+  document.body.appendChild(popEl);
+
+  const r=anchor.getBoundingClientRect();
+  const pw=320, ph=popEl.offsetHeight;
+  let left=Math.min(Math.max(12, r.left+40), innerWidth-pw-12);
+  let top=r.bottom+8;
+  if(top+ph>innerHeight-12) top=Math.max(12,r.top-ph-8);
+  popEl.style.left=left+'px'; popEl.style.top=top+'px';
+
+  popEl.querySelectorAll('.pop-app').forEach(el=>el.onclick=()=>{ applyChange(d.id, el.dataset.app); closePopover(); });
+  popEl.querySelector('[data-act=browse]').onclick=()=>{ toast('原型环境：正式版将打开 NSOpenPanel 选择 /Applications 之外的应用，并自动注册到 Launch Services'); closePopover(); };
+  const rs=popEl.querySelector('[data-act=reset]');
+  if(rs) rs.onclick=()=>{ applyChange(d.id, null); closePopover(); };
+}
+
+function applyChange(id, appKey, silent){
+  const d=DATA[id];
+  const from=d.def;
+  if(from===appKey) return;
+  d.def=appKey;
+  d.mod={from:from?APPS[from].name:null, to:appKey?APPS[appKey].name:'系统默认'};
+  if(!S.recent.find(r=>r.id===id)) S.recent.unshift({id,from:from?APPS[from].name:null,to:appKey?APPS[appKey].name:'系统默认'});
+  // 联动：共享 UTI / scheme 的行同步
+  if(d.shared){
+    DATA.forEach(o=>{ if(o.shared===d.shared&&o.id!==id){ o.def=appKey; o.mod=d.mod; }});
+  }
+  if(!silent) toast(`${esc(dispId(d))} → <b>${esc(appKey?APPS[appKey].name:'系统默认')}</b> <span class="ok">✓</span>${d.shared?'（联动类型已同步）':''}`);
+  renderSidebar(); renderMain();
+}
+
+/* ═══════════════ 批量 ═══════════════ */
+function openBatchModal(ids, isTransfer){
+  const union=new Set(); ids.forEach(id=>DATA[id].apps.forEach(a=>union.add(a)));
+  const overlay=document.createElement('div');
+  overlay.className='overlay';
+  overlay.innerHTML=`<div class="sheet">
+    <div class="h" style="padding:20px 20px 12px;text-align:center">
+      <h3>${isTransfer?'全部转移给':'批量设置默认应用'}</h3>
+      <p>将对 <b>${ids.length}</b> 个类型应用所选应用；不支持该类型的应用将跳过并在结果中列出</p>
+    </div>
+    <div class="sheet-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px">
+        ${[...union].map(k=>`
+          <div class="pop-app" data-app="${k}" style="border:1px solid transparent">
+            <span class="app-icon" style="background:${APPS[k].bg}">${APPS[k].ic}</span>
+            <span><div class="n">${esc(APPS[k].name)}</div><div class="sub">${esc(APPS[k].bid)}</div></span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn" data-x>取消</button>
+      <button class="btn primary" data-ok disabled>应用</button>
+    </div></div>`;
+  document.body.appendChild(overlay);
+  let pick=null;
+  overlay.querySelectorAll('[data-app]').forEach(el=>el.onclick=()=>{
+    overlay.querySelectorAll('[data-app]').forEach(x=>x.style.border='1px solid transparent');
+    el.style.border='1px solid var(--blue)'; el.style.background='rgba(10,124,255,.06)';
+    pick=el.dataset.app; overlay.querySelector('[data-ok]').disabled=false;
+  });
+  overlay.querySelector('[data-x]').onclick=()=>overlay.remove();
+  overlay.querySelector('[data-ok]').onclick=()=>{ overlay.remove(); batchApply(pick, ids, isTransfer); };
+}
+
+function batchApply(appKey, idsArg, isTransfer){
+  const ids=idsArg||[...S.sel];
+  let ok=0, skip=[];
+  ids.forEach(id=>{
+    const d=DATA[id];
+    if(appKey===null||d.apps.includes(appKey)){ applyChange(id, appKey, true); ok++; }
+    else skip.push(dispId(d));
+  });
+  S.sel.clear(); S.lastIdx=null;
+  toast(`批量完成：<span class="ok">${ok}</span> 项${appKey?' → '+esc(APPS[appKey].name):' 已恢复系统默认'}${skip.length?'，跳过 '+skip.length+' 项（应用不支持）':''}`);
+  renderSidebar(); renderMain();
+}
+
+/* ═══════════════ 导出 TOML ═══════════════ */
+function buildTOML(){
+  const ex=DATA.filter(d=>d.kind==='ext'&&d.def), ty=[], sc=DATA.filter(d=>d.kind==='scheme'&&d.def);
+  let out='# 由 Openly 导出 · 兼容 infat CLI\n# 使用方法：infat --config 本文件路径\n\n';
+  out+='[extensions]\n'+ex.map(d=>`${d.tag} = "${APPS[d.def].name}"`).join('\n')+'\n\n';
+  out+='[types]\n#（当前未设置回退类型，可手动添加，如 plain-text = "TextEdit"）\n\n';
+  out+='[schemes]\n'+sc.map(d=>`${d.tag} = "${APPS[d.def].name}"`).join('\n')+'\n';
+  return out;
+}
+$('#btnExport').onclick=()=>{
+  const overlay=document.createElement('div');
+  overlay.className='overlay';
+  const toml = buildTOML().split('\n').map(line=>{
+    if(line.startsWith('#')) return `<span class="c">${esc(line)}</span>`;
+    if(line.startsWith('[')) return `<span class="k">${esc(line)}</span>`;
+    return esc(line).replace(/&quot;([^&]*)&quot;/g,'<span class="v">&quot;$1&quot;</span>');
+  }).join('\n');
+  overlay.innerHTML=`<div class="sheet" style="width:520px">
+    <div class="sheet-head"><h3>导出关联配置</h3>
+      <p>生成 infat 兼容的 TOML — 可放入 dotfiles，新机器上 <b>infat --config</b> 一键还原</p></div>
+    <div class="sheet-body"><div class="toml">${toml}</div></div>
+    <div class="sheet-foot">
+      <button class="btn" data-x>关闭</button>
+      <button class="btn primary" data-copy>拷贝到剪贴板</button>
+      <button class="btn" data-save>存储…</button>
+    </div></div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('[data-x]').onclick=()=>overlay.remove();
+  overlay.querySelector('[data-copy]').onclick=e=>{
+    navigator.clipboard?.writeText(buildTOML());
+    e.target.textContent='已拷贝 ✓'; setTimeout(()=>e.target.textContent='拷贝到剪贴板',1500);
+  };
+  overlay.querySelector('[data-save]').onclick=()=>{ toast('原型环境：正式版将弹出 NSSavePanel 存储为 .toml 文件'); };
+};
+$('#btnImport').onclick=()=>{
+  const overlay=document.createElement('div');
+  overlay.className='overlay';
+  overlay.innerHTML=`<div class="sheet">
+    <div class="sheet-head"><h3>导入 infat 配置</h3>
+      <p>原型演示差异预览流程：<br>选择 TOML 后，Openly 会对比当前系统关联，列出<b>将新增 / 将覆盖</b>的条目，确认后应用</p></div>
+    <div class="sheet-body">
+      <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">
+        <div style="padding:9px 14px;background:rgba(52,199,89,.10);font-size:12.5px">＋ 新增 <b>3</b> 条：.conf → VS Code · .log → 终端 · obsidian: → Obsidian</div>
+        <div style="padding:9px 14px;background:rgba(10,124,255,.08);font-size:12.5px;border-top:1px solid var(--line)">↻ 覆盖 <b>2</b> 条：.svg: Figma → Chrome · http/https: Safari → Arc</div>
+        <div style="padding:9px 14px;font-size:12.5px;color:var(--text-3);border-top:1px solid var(--line)">其余 38 条与当前系统一致，保持不变</div>
+      </div>
+    </div>
+    <div class="sheet-foot"><button class="btn" data-x>取消</button><button class="btn primary" data-ok>应用变更（5）</button></div></div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('[data-x]').onclick=()=>overlay.remove();
+  overlay.querySelector('[data-ok]').onclick=()=>{
+    applyChange(DATA.findIndex(d=>d.tag==='svg'),'chrome',true);
+    applyChange(DATA.findIndex(d=>d.tag==='http'),'arc',true);
+    applyChange(DATA.findIndex(d=>d.tag==='conf'),'vscode',true);
+    applyChange(DATA.findIndex(d=>d.tag==='log'),'terminal',true);
+    overlay.remove(); toast('导入完成：<span class="ok">5</span> 条关联已更新'); renderSidebar(); renderMain();
+  };
+};
+
+/* ═══════════════ 视图切换 / 搜索 ═══════════════ */
+document.querySelectorAll('#segView button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#segView button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  S.view=b.dataset.view; S.sel.clear();
+  $('#toolTitle').textContent = S.view==='type'?'Openly':'Openly · 按应用';
+  renderSidebar(); renderMain();
+});
+$('#searchInput').oninput=e=>{ S.q=e.target.value.trim(); renderMain(); };
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closePopover(); document.querySelectorAll('.overlay').forEach(o=>o.remove()); }
+});
+
+/* ═══════════════ toast ═══════════════ */
+function toast(html){
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  const t=document.createElement('div');
+  t.className='toast'; t.innerHTML=html;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.classList.add('out'); setTimeout(()=>t.remove(),320);},2600);
+}
+
+/* init */
+sortData(); renderSidebar(); renderMain();
+</script>
+</body>
+</html>
