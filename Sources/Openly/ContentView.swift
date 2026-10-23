@@ -57,6 +57,11 @@ struct ContentView: View {
                     Label("刷新", systemImage: "arrow.clockwise")
                 }
                 .help("重新读取 Launch Services 数据")
+                Divider()
+                SettingsLink {
+                    Label(t("Settings…"), systemImage: "gearshape")
+                }
+                .help(t("Settings…"))
             }
         }
         .overlay(alignment: .bottom) {

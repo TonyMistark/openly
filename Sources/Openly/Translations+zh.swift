@@ -39,6 +39,7 @@ extension Translations {
 
         "About": "关于",
         "About Openly": "关于 Openly",
+        "Settings…": "设置…",
         "GitHub Repository": "GitHub 仓库",
         "License": "许可证",
         "MIT License": "MIT 许可证",
